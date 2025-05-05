@@ -5,7 +5,7 @@ const notification = document.getElementById("notification");
 const userModal = document.getElementById("user-modal");
 const modalUserDetails = document.getElementById("modal-user-details");
 const closeModal = document.querySelector(".close-modal");
-let selectedPostId = null;
+const selectedPostId = null;
 let posts = [];
 let userCache = {};
 
@@ -34,7 +34,7 @@ function savePostsInLocal() {
 }
 
 function saveUserInLocal(user) {
-	let users = JSON.parse(localStorage.getItem("usersKeys") || "{}");
+	const users = JSON.parse(localStorage.getItem("usersKeys") || "{}");
 	users[user.id] = user;
 	localStorage.setItem("usersKeys", JSON.stringify(users));
 
@@ -46,7 +46,7 @@ function getLocalUser(userId) {
 		return userCache[userId];
 	}
 
-	let users = JSON.parse(localStorage.getItem("usersKeys") || "{}");
+	const users = JSON.parse(localStorage.getItem("usersKeys") || "{}");
 	if (users[userId]) {
 		userCache[userId] = users[userId];
 	}
@@ -114,9 +114,8 @@ async function addPost(event) {
 		const createdPost = await response.json();
 
 		const newId = Date.now();
-		console.log("Generated new ID:", newId);
 
-		const finalPost = { ...createdPost, id: newId };
+		const finalPost = { ...createdPost, id: newId, isLocal: true };
 		posts.unshift(finalPost);
 
 		savePostsInLocal();
@@ -133,12 +132,31 @@ async function addPost(event) {
 async function editPost(event) {
 	event.preventDefault();
 
-	const id = document.getElementById("update-id").value;
+	const id = Number.parseInt(document.getElementById("update-id").value);
 	const title = document.getElementById("update-title").value;
 	const body = document.getElementById("update-body").value;
-	const userId = document.getElementById("update-userId").value;
 
-	const updatedPost = { id, title, body, userId };
+	const index = posts.findIndex((post) => post.id === id);
+	if (index === -1) {
+		notify("Post not found", "error");
+		return;
+	}
+
+	const originalPost = posts[index];
+	const updatedPost = {
+		...originalPost,
+		title,
+		body,
+	};
+
+	if (originalPost.isLocal || id > 100) {
+		posts[index] = updatedPost;
+		savePostsInLocal();
+		showPosts(posts);
+		notify("Post updated successfully!", "success");
+		updatePostForm.reset();
+		return;
+	}
 
 	try {
 		const response = await fetch(
@@ -158,14 +176,11 @@ async function editPost(event) {
 
 		const result = await response.json();
 
-		const index = posts.findIndex((post) => post.id === id);
-		if (index !== -1) {
-			posts[index] = result;
+		result.userId = originalPost.userId;
 
-			savePostsInLocal();
-
-			showPosts(posts);
-		}
+		posts[index] = result;
+		savePostsInLocal();
+		showPosts(posts);
 
 		notify("Post updated successfully!", "success");
 		updatePostForm.reset();
@@ -175,10 +190,18 @@ async function editPost(event) {
 }
 
 function delPost(id) {
+	if (id > 100) {
+		posts = posts.filter((post) => post.id !== id);
+		savePostsInLocal();
+		showPosts(posts);
+		notify("Post deleted successfully!", "success");
+		return;
+	}
+
 	const xhr = new XMLHttpRequest();
 	xhr.open("DELETE", `https://jsonplaceholder.typicode.com/posts/${id}`, true);
 
-	xhr.onload = function () {
+	xhr.onload = () => {
 		if (xhr.status >= 200 && xhr.status < 300) {
 			posts = posts.filter((post) => post.id !== id);
 
@@ -192,7 +215,7 @@ function delPost(id) {
 		}
 	};
 
-	xhr.onerror = function () {
+	xhr.onerror = () => {
 		notify("Network error occurred while trying to delete post", "error");
 	};
 
@@ -238,7 +261,7 @@ function getUser(userId) {
 	const xhr = new XMLHttpRequest();
 	xhr.open("GET", `https://jsonplaceholder.typicode.com/users/${userId}`, true);
 
-	xhr.onload = function () {
+	xhr.onload = () => {
 		if (xhr.status >= 200 && xhr.status < 300) {
 			try {
 				const user = JSON.parse(xhr.responseText);
@@ -256,7 +279,7 @@ function getUser(userId) {
 		}
 	};
 
-	xhr.onerror = function () {
+	xhr.onerror = () => {
 		notify("Network error occurred while trying to fetch user details", "error");
 		modalUserDetails.innerHTML = "<p>Network error. Please try again later.</p>";
 	};
@@ -282,7 +305,7 @@ async function showPosts(posts) {
 			postElement.classList.add("selected");
 		}
 
-		let username = await getUsername(post.userId);
+		const username = await getUsername(post.userId);
 
 		postElement.innerHTML = `
             <h3 class="post-title">${post.title}</h3>
